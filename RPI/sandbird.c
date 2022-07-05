@@ -6,31 +6,79 @@
  */
 
 
-#ifndef _POSIX_C_SOURCE
-  #define _POSIX_C_SOURCE 200809L
-#endif
 #include <stdio.h>
+#ifdef _WIN32
+  #ifndef _WIN32_WINNT
+    #define _WIN32_WINNT 0x501
+  #endif
+  #ifndef _CRT_SECURE_NO_WARNINGS
+    #define _CRT_SECURE_NO_WARNINGS
+  #endif
+  #ifndef FD_SETSIZE
+    #define FD_SETSIZE 2048
+  #endif
+  #include <winsock2.h>
+  #include <ws2tcpip.h>
+  #include <windows.h>
+#else
+  #ifndef _POSIX_C_SOURCE
+    #define _POSIX_C_SOURCE 200809L
+  #endif
+  #include <unistd.h>
+  #include <fcntl.h>
+  #include <netdb.h>
+  #include <sys/types.h>
+  #include <sys/socket.h>
+  #include <sys/select.h>
+  #include <arpa/inet.h>
+  #include <netinet/in.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
-#include <inttypes.h>
-#include <errno.h>
 #include <ctype.h>
+#include <signal.h>
+#include <errno.h>
 #include <limits.h>
-#include <pthread.h>
-#include <fcntl.h>
-#include <sys/stat.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 #include "sandbird.h"
-#include "KPutil.h"
-#include <orbis/Net.h>
+#include "net_fix.h"
 
-typedef int sb_Socket;
-#define INVALID_SOCKET -1
+
+#ifdef _WIN32
+  #define close(a) closesocket(a)
+  #define setsockopt(a, b, c, d, e) setsockopt(a, b, c, (char*)(d), e)
+
+  #undef  errno
+  #define errno WSAGetLastError()
+
+  #undef  EWOULDBLOCK
+  #define EWOULDBLOCK WSAEWOULDBLOCK
+
+  const char *inet_ntop(int af, const void *src, char *dst, socklen_t size) {
+    union { struct sockaddr sa; struct sockaddr_in sai;
+            struct sockaddr_in6 sai6; } addr;
+    int res;
+    memset(&addr, 0, sizeof(addr));
+    addr.sa.sa_family = af;
+    if (af == AF_INET6) {
+      memcpy(&addr.sai6.sin6_addr, src, sizeof(addr.sai6.sin6_addr));
+    } else {
+      memcpy(&addr.sai.sin_addr, src, sizeof(addr.sai.sin_addr));
+    }
+    res = WSAAddressToStringA(&addr.sa, sizeof(addr), 0, dst, (LPDWORD) &size);
+    if (res != 0) return NULL;
+    return dst;
+  }
+#endif
+
+#ifdef _WIN32
+  typedef SOCKET sb_Socket;
+#else
+  typedef int sb_Socket;
+  #define INVALID_SOCKET -1
+#endif
 
 enum {
   STATE_RECEIVING_HEADER,
@@ -47,38 +95,32 @@ enum {
  * Utility
  *===========================================================================*/
 
-static int set_socket_blocking(sb_Socket sockfd, bool flag) {
-  int flags;
-  int ret;
-  flags = fcntl(sockfd, F_GETFL);
-  if (flags < 0) {
-    return SB_EFAILURE;
-  }
-  flags &= ~O_NONBLOCK;
-  if (!flag) {
-    flags |= O_NONBLOCK;
-  }
-  ret = fcntl(sockfd, F_SETFL, flags);
-  if (ret < 0) {
-    return SB_EFAILURE;
-  }
-  return SB_ESUCCESS;
+static void set_socket_non_blocking(sb_Socket sockfd) {
+#ifdef _WIN32
+  u_long mode = 1;
+  ioctlsocket(sockfd, FIONBIO, &mode);
+#else
+  int flags = fcntl(sockfd, F_GETFL);
+  fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+#endif
 }
 
 
 static int get_socket_address(sb_Socket sockfd, char *dst) {
   int err;
-  union { struct sockaddr sa;
-          struct sockaddr_storage sas;
-          struct sockaddr_in sai;
-  } addr;
+  union { struct sockaddr sa; struct sockaddr_storage sas;
+          struct sockaddr_in sai; struct sockaddr_in6 sai6; } addr;
   socklen_t sz = sizeof(addr);
   err = getpeername(sockfd, &addr.sa, &sz);
   if (err == -1) {
     *dst = '\0';
     return SB_EFAILURE;
   }
-  inet_ntop(AF_INET, &addr.sai.sin_addr, dst, INET_ADDRSTRLEN);
+  if (addr.sas.ss_family == AF_INET6) {
+    inet_ntop(AF_INET6, &addr.sai6.sin6_addr, dst, INET6_ADDRSTRLEN);
+  } else {
+    inet_ntop(AF_INET, &addr.sai.sin_addr, dst, INET_ADDRSTRLEN);
+  }
   return SB_ESUCCESS;
 }
 
@@ -171,6 +213,7 @@ const char *sb_error_str(int code) {
     case SB_EBADRESULT  : return "bad result code from event handler";
     case SB_ECANTOPEN   : return "cannot open file";
     case SB_ENOTFOUND   : return "not found";
+    case SB_EFDTOOBIG   : return "got socket fd larger than FD_SETSIZE";
     default             : return "unknown";
   }
 }
@@ -229,11 +272,6 @@ static int sb_buffer_push_str(sb_Buffer *buf, const char *p, size_t len) {
     p++, len--;
   }
   return SB_ESUCCESS;
-}
-
-
-static inline bool fmt_is_modifier(int c) {
-  return (c == 'l');
 }
 
 
@@ -359,9 +397,9 @@ static sb_Stream *sb_stream_new(sb_Server *srv, sb_Socket sockfd) {
   sb_buffer_init(&st->send_buf);
   st->sockfd = sockfd;
   st->server = srv;
-  st->init_time = time(NULL);
+  st->init_time = srv->now;
   st->last_activity = srv->now;
-  set_socket_blocking(sockfd, true);
+  set_socket_non_blocking(sockfd);
   get_socket_address(sockfd, st->address);
   return st;
 }
@@ -388,59 +426,15 @@ static int sb_stream_emit(sb_Stream *st, sb_Event *e) {
 }
 
 
-static void sb_stream_link(sb_Stream *st) {
-  sb_Server *srv = st->server;
-  struct sb_Stream *st2;
-
-  /* Push stream to list */
-  pthread_mutex_lock(&srv->stream_mtx);
-  if (srv->streams) {
-    st2 = srv->streams;
-    while (st2->next) {
-      st2 = st2->next;
-    }
-    st2->next = st;
-    st->prev = st2;
-  } else {
-    srv->streams = st;
-  }
-  pthread_mutex_unlock(&srv->stream_mtx);
-}
-
-
-static void sb_stream_unlink(sb_Stream *st) {
-  sb_Server *srv = st->server;
-
-  /* Pop stream from list */
-  pthread_mutex_lock(&srv->stream_mtx);
-  if (st->next) {
-    st->next->prev = st->prev;
-  }
-  if (st->prev) {
-    st->prev->next = st->next;
-  }
-  if (srv->streams == st) {
-    srv->streams = st->next;
-  }
-  pthread_mutex_unlock(&srv->stream_mtx);
-}
-
-
 static void sb_stream_destroy(sb_Stream *st) {
   sb_Event e;
-
   /* Emit close event */
-  memset(&e, 0, sizeof(e));
   e.type = SB_EV_CLOSE;
   sb_stream_emit(st, &e);
-
   /* Clean up */
   shutdown(st->sockfd, SHUT_RDWR);
   close(st->sockfd);
-  if (st->send_fd > 0) {
-    shutdown(st->send_fd, SHUT_RDWR);
-    close(st->send_fd);
-  }
+  if (st->send_fp) fclose(st->send_fp);
   sb_buffer_deinit(&st->recv_buf);
   sb_buffer_deinit(&st->send_buf);
   free(st);
@@ -450,7 +444,6 @@ static void sb_stream_destroy(sb_Stream *st) {
 static int sb_stream_recv(sb_Stream *st) {
   for (;;) {
     char buf[4096];
-    size_t n;
     int err, i, sz;
 
     /* Receive data */
@@ -469,11 +462,7 @@ static int sb_stream_recv(sb_Stream *st) {
     /* Write to recv_buf */
     for (i = 0; i < sz; i++) {
       err = sb_buffer_push_char(&st->recv_buf, buf[i]);
-      if (err) {
-close_stream:
-        sb_stream_close(st);
-        return err;
-      }
+      if (err) return err;
 
       /* Have we received the whole header? */
       if (
@@ -486,7 +475,7 @@ close_stream:
         st->state = STATE_RECEIVING_REQUEST;
         /* Assure recv_buf is null-terminated */
         err = sb_buffer_null_terminate(&st->recv_buf);
-        if (err) goto close_stream;
+        if (err) return err;
         /* If the header contains the Content-Length field we set the
          * expected_recv_len and continue writing to the recv_buf, otherwise we
          * assume the request is complete */
@@ -519,12 +508,11 @@ handle_request:
         }
         /* Build and emit `request` event */
         url_decode(path, st->recv_buf.s + path_idx, sizeof(path));
-        memset(&e, 0, sizeof(e));
         e.type = SB_EV_REQUEST;
         e.method = method;
         e.path = path;
         err = sb_stream_emit(st, &e);
-        if (err) goto close_stream;
+        if (err) return err;
         /* No more data needs to be received (nor should it exist) */
         return SB_ESUCCESS;
       }
@@ -556,16 +544,16 @@ send_data:
     /* Update last_activity */
     st->last_activity = st->server->now;
 
-  } else if (st->send_fd > 0) {
+  } else if (st->send_fp) {
     /* Read chunk, write to stream and continue sending */
     int err = sb_buffer_reserve(&st->send_buf, 8192);
     if (err) return err;
-    st->send_buf.len = read(st->send_fd, st->send_buf.s, st->send_buf.cap);
+    st->send_buf.len = fread(st->send_buf.s, 1, st->send_buf.cap, st->send_fp);
     if (st->send_buf.len > 0) goto send_data;
 
     /* Reached end of file */
-    close(st->send_fd);
-    st->send_fd = -1;
+    fclose(st->send_fp);
+    st->send_fp = NULL;
 
   } else {
     /* No more data left -- disconnect */
@@ -619,33 +607,32 @@ int sb_send_header(sb_Stream *st, const char *field, const char *val) {
 int sb_send_file(sb_Stream *st, const char *filename) {
   int err;
   char buf[32];
-  struct stat stbuf;
-  int fd = -1;
+  size_t sz;
+  FILE *fp = NULL;
   if (st->state > STATE_SENDING_HEADER) {
     return SB_EBADSTATE;
   }
   /* Try to open file */
-  fd = open(filename, O_RDONLY);
-  if (fd <= 0) return SB_ECANTOPEN;
+  fp = fopen(filename, "rb");
+  if (!fp) return SB_ECANTOPEN;
 
   /* Get file size and write headers */
-  if (fstat(fd, &stbuf) < 0) {
-    err = SB_EBADRESULT;
-    goto fail;
-  }
-  snprintf(buf, sizeof(buf), "%" PRIuMAX, (uintmax_t)stbuf.st_size);
+  fseek(fp, 0, SEEK_END);
+  sz = ftell(fp);
+  sprintf(buf, "%u", (unsigned) sz);
   err = sb_send_header(st, "Content-Length", buf);
   if (err) goto fail;
   err = sb_stream_finalize_header(st);
   if (err) goto fail;
 
-  /* Set stream's file descriptor and state */
-  st->send_fd = fd;
+  /* Rewind file, set stream's fp and state */
+  fseek(fp, 0, SEEK_SET);
+  st->send_fp = fp;
   st->state = STATE_SENDING_FILE;
   return SB_ESUCCESS;
 
 fail:
-  if (fd > 0) close(fd);
+  if (fp) fclose(fp);
   return err;
 }
 
@@ -700,16 +687,12 @@ int sb_get_header(sb_Stream *st, const char *field, char *dst, size_t len) {
 }
 
 
-int sb_get_var_ex(sb_Stream *st, const char *name, char *dst, size_t len, bool from_data_only) {
+int sb_get_var(sb_Stream *st, const char *name, char *dst, size_t len) {
   const char *q, *s = NULL;
 
-  if (!from_data_only) {
-    /* Find beginning of query string */
-    q = st->recv_buf.s + strcspn(st->recv_buf.s, "?\r");
-    q = (*q == '?') ? (q + 1) : NULL;
-  } else {
-    q = NULL;
-  }
+  /* Find beginning of query string */
+  q = st->recv_buf.s + strcspn(st->recv_buf.s, "?\r");
+  q = (*q == '?') ? (q + 1) : NULL;
 
   /* Try to get var from query string, then data string */
   if (q) s = find_var_value(q, name);
@@ -721,26 +704,6 @@ int sb_get_var_ex(sb_Stream *st, const char *name, char *dst, size_t len, bool f
     return SB_ENOTFOUND;
   }
   return url_decode(dst, s, len);
-}
-
-
-int sb_get_var(sb_Stream *st, const char *name, char *dst, size_t len) {
-  return sb_get_var_ex(st, name, dst, len, false);
-}
-
-
-char *sb_get_content_data_bak(sb_Stream *st, size_t *len) {
-  if (st->data_idx) {
-    if (len) {
-      *len = st->expected_recv_len - st->data_idx;
-    }
-    return st->recv_buf.s + st->data_idx;
-  } else {
-    if (len) {
-      *len = 0;
-    }
-    return NULL;
-  }
 }
 
 
@@ -834,27 +797,28 @@ fail:
 }
 
 
-time_t sb_stream_get_init_time(sb_Stream *st) {
-  return st->init_time;
-}
-
-
 /*===========================================================================
  * Server
  *===========================================================================*/
+
 sb_Server *sb_new_server(const sb_Options *opt) {
   sb_Server *srv;
   struct sockaddr_in in_addr;
   char *tmp_end;
   long port;
+  struct addrinfo hints, *ai = NULL;
   int err, optval;
+
+#ifdef _WIN32
+  { WSADATA dat; WSAStartup(MAKEWORD(2, 2), &dat); }
+#else
+  /* Stops the SIGPIPE signal being raised when writing to a closed socket */
+  signal(SIGPIPE, SIG_IGN);
+#endif
 
   /* Create server object */
   srv = malloc( sizeof(*srv) );
-  if (!srv) {
-	  KernelPrintOut("Failed to malloc memory");
-	  goto fail;
-  }
+  if (!srv) goto fail;
   memset(srv, 0, sizeof(*srv));
   srv->sockfd = INVALID_SOCKET;
   srv->handler = opt->handler;
@@ -863,6 +827,7 @@ sb_Server *sb_new_server(const sb_Options *opt) {
   srv->max_request_size = str_to_uint(opt->max_request_size);
   srv->max_lifetime = str_to_uint(opt->max_lifetime);
 
+  /* Get addrinfo */
   memset(&in_addr, 0, sizeof(in_addr));
   in_addr.sin_family = AF_INET;
   if (opt->port == NULL) {
@@ -880,7 +845,6 @@ sb_Server *sb_new_server(const sb_Options *opt) {
   
   if (opt->host != NULL) {
     if (inet_pton(in_addr.sin_family, opt->host, &in_addr.sin_addr.s_addr) != 1) {
-		KernelPrintOut("inet_pton failed");
 		goto fail;
     }
   } else {
@@ -889,143 +853,158 @@ sb_Server *sb_new_server(const sb_Options *opt) {
 
   /* Init socket */
   srv->sockfd = sceNetSocket("RPI", in_addr.sin_family, SOCK_STREAM, IPPROTO_TCP);
-  if (srv->sockfd == INVALID_SOCKET)
-  {
-	  KernelPrintOut("sockfd = -1");
-	  goto fail;
-  }
-
-  set_socket_blocking(srv->sockfd, false);
+  if (srv->sockfd == INVALID_SOCKET) goto fail;
+  set_socket_non_blocking(srv->sockfd);
 
   /* Set SO_REUSEADDR so that the socket can be immediately bound without
    * having to wait for any closed socket on the same port to timeout */
   optval = 1;
-  err = sceNetSetsockopt(srv->sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
-  
-  /* Bind and listen */
-  err = sceNetBind(srv->sockfd, (struct sockaddr*)&in_addr, sizeof(in_addr));
-  if (err)
-  {
-	  KernelPrintOut("Failed to bind socket ret %d %s\n", err, strerror(errno));
-	  goto fail;
-  }
-  err = listen(srv->sockfd, 1023);
-  if (err) {
-	  KernelPrintOut("listen failed");
-	  goto fail;
-  }
+  sceNetSetsockopt(srv->sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
 
-  /* Create mutex */
-  err = pthread_mutex_init(&srv->stream_mtx, NULL);
-  if (err) {
-	  KernelPrintOut("mutex failed");
-	  goto fail;
-  }
+  /* Bind and listen */
+  err = sceNetBind(srv->sockfd, (OrbisNetSockaddr*)&in_addr, sizeof(in_addr));
+  if (err) goto fail;
+  err = listen(srv->sockfd, 1023);
+  if (err) goto fail;
+
+  /* Clean up */
+  if (ai) freeaddrinfo(ai);
+  ai = NULL;
 
   return srv;
 
 fail:
+  if (ai) freeaddrinfo(ai);
   if (srv) sb_close_server(srv);
   return NULL;
 }
 
 
 void sb_close_server(sb_Server *srv) {
-  sb_Stream *st;
-
   /* Destroy all streams */
-  pthread_mutex_lock(&srv->stream_mtx);
-  st = srv->streams;
-  while (st) {
-    st = st->next;
+  while (srv->streams) {
+    sb_Stream *st = srv->streams;
+    srv->streams = st->next;
     sb_stream_destroy(st);
   }
-  srv->streams = NULL;
-  pthread_mutex_unlock(&srv->stream_mtx);
 
   /* Clean up */
   if (srv->sockfd != INVALID_SOCKET) {
     shutdown(srv->sockfd, SHUT_RDWR);
     close(srv->sockfd);
   }
-
-  pthread_mutex_destroy(&srv->stream_mtx);
-
   free(srv);
 }
 
 
-static void* conn_thread(void* arg) {
-  struct sb_Stream *st = (struct sb_Stream *)arg;
-  sb_Event e;
+int sb_poll_server(sb_Server *srv, int timeout) {
+  sb_Stream *st, **st_next;
+  fd_set fds_read, fds_write;
+  sb_Socket max_fd = srv->sockfd;
+  struct timeval tv;
   int err;
 
-  /* Do `connect` event */
-  memset(&e, 0, sizeof(e));
-  e.type = SB_EV_CONNECT;
-  err = sb_stream_emit(st, &e);
-  if (err) goto fail;
+  /* Init fd_sets */
+  FD_ZERO(&fds_read);
+  FD_ZERO(&fds_write);
 
-  /* Receive data */
-  err = sb_stream_recv(st);
-  if (err) goto fail;
+  /* Add server sockfd to fd_set */
+  FD_SET(srv->sockfd, &fds_read);
 
-  while (st->state != STATE_CLOSING) {
-    err = sb_stream_send(st);
-    if (err) goto fail;
+  /* Add streams to fd_sets */
+  for (st = srv->streams; st; st = st->next) {
+    if (st->state >= STATE_SENDING_STATUS) {
+      FD_SET(st->sockfd, &fds_write);
+    } else {
+      FD_SET(st->sockfd, &fds_read);
+    }
+    if (st->sockfd > max_fd) max_fd = st->sockfd;
   }
 
-fail:
-  /* Unlinking stream from list */
-  sb_stream_unlink(st);
+  /* Init timeout timeval */
+  tv.tv_sec = timeout / 1000;
+  tv.tv_usec = (timeout % 1000) * 1000;
 
-  /* Destroy stream */
-  sb_stream_destroy(st);
-
-  pthread_exit(NULL);
-}
-
-
-int sb_poll_server(sb_Server *srv) {
-  struct sb_Stream *st;
-  sb_Socket sockfd = INVALID_SOCKET;
-  pthread_t thr;
-  int err;
+  /* Do select */
+  select(max_fd + 1, &fds_read, &fds_write, NULL, &tv);
 
   /* Get and store current time */
   srv->now = time(NULL);
 
-  /* Accept connections */
-  while ( (sockfd = accept(srv->sockfd, NULL, NULL)) != INVALID_SOCKET ) {
-    /* Init new stream */
-    st = sb_stream_new(srv, sockfd);
-    if (!st) {
-      err = SB_EOUTOFMEM;
-      goto fail;
+  /* Handle existing streams */
+  st_next = &srv->streams;
+  while (*st_next) {
+    st = *st_next;
+
+    /* Receive data */
+    if (FD_ISSET(st->sockfd, &fds_read)) {
+      err = sb_stream_recv(st);
+      if (err) return err;
     }
 
-    /* Link stream to list */
-    sb_stream_link(st);
+    /* Send data */
+    if (FD_ISSET(st->sockfd, &fds_write)) {
+      err = sb_stream_send(st);
+      if (err) return err;
+    }
 
-    /* Create processing thread */
-    err = pthread_create(&thr, NULL, &conn_thread, st);
-    if (err) goto fail;
+    /* Check stream against timeout, max request length and max lifetime */
+    if (
+      (srv->timeout && srv->now - st->last_activity > srv->timeout / 1000) ||
+      (srv->max_lifetime &&
+       srv->now - st->init_time > srv->max_lifetime / 1000) ||
+      (srv->max_request_size && st->recv_buf.len >= srv->max_request_size)
+    ) {
+      sb_stream_close(st);
+    }
 
-    sockfd = INVALID_SOCKET;
+    /* Handle disconnect -- destroy stream */
+    if (st->state == STATE_CLOSING) {
+      *st_next = st->next;
+      sb_stream_destroy(st);
+      continue;
+    }
+
+    /* Next */
+    st_next = &(*st_next)->next;
   }
 
-  return SB_RES_OK;
+  /* Handle new streams */
+  if (FD_ISSET(srv->sockfd, &fds_read)) {
+    sb_Event e;
+    sb_Socket sockfd;
 
-fail:
-  if (st) {
-    /* Unlinking stream from list */
-    sb_stream_unlink(st);
+    /* Accept connections */
+    while ( (sockfd = accept(srv->sockfd, NULL, NULL)) != INVALID_SOCKET ) {
+
+#ifdef _WIN32
+      /* As the fd_set on windows is an array rather than a bitset, an fd
+       * value can never be too large for it; thus this check is omitted */
+#else
+      /* Check FD size, error if it is larger than FD_SETSIZE */
+      if (sockfd > FD_SETSIZE) {
+        close(sockfd);
+        return SB_EFDTOOBIG;
+      }
+#endif
+
+      /* Init new stream */
+      st = sb_stream_new(srv, sockfd);
+      if (!st) {
+        close(sockfd);
+        return SB_EOUTOFMEM;
+      }
+
+      /* Push stream to list */
+      st->next = srv->streams;
+      srv->streams = st;
+
+      /* Do `connect` event */
+      e.type = SB_EV_CONNECT;
+      err = sb_stream_emit(st, &e);
+      if (err) return err;
+    }
   }
 
-  if (sockfd != INVALID_SOCKET) {
-    shutdown(sockfd, SHUT_RDWR);
-    close(sockfd);
-  }
-  return err;
+  return SB_ESUCCESS;
 }
-

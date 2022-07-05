@@ -11,16 +11,15 @@
 
 #include <stddef.h>
 #include <stdarg.h>
-#include <stdbool.h>
 #include <time.h>
+#include <stdbool.h>
 #include <stdio.h>
-#include <pthread.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define SB_VERSION "0.1.4"
+#define SB_VERSION "0.1.3"
 
 typedef struct sb_Server  sb_Server;
 typedef struct sb_Stream  sb_Stream;
@@ -41,7 +40,6 @@ struct sb_Server {
   time_t timeout;             /* Stream no-activity timeout */
   time_t max_lifetime;        /* Maximum time a stream can exist */
   size_t max_request_size;    /* Maximum request size in bytes */
-  pthread_mutex_t stream_mtx; /* Mutex to lock stream access */
 };
 
 struct sb_Stream {
@@ -55,11 +53,8 @@ struct sb_Stream {
   sb_Socket sockfd;           /* Socket for this streams connection */
   sb_Buffer recv_buf;         /* Data received from client */
   sb_Buffer send_buf;         /* Data waiting to be sent to client */
-  int send_fd;                /* File descriptor currently being sent to client */
-  pthread_t thr;              /* Processing thread */
-  sb_Stream *next;            /* Next stream in linked list */
-  sb_Stream *prev;            /* Previous stream in linked list */
   FILE *send_fp;              /* File currently being sent to client */
+  sb_Stream *next;            /* Next stream in linked list */
 };
 
 struct sb_Event {
@@ -108,7 +103,7 @@ enum {
 const char *sb_error_str(int code);
 sb_Server *sb_new_server(const sb_Options *opt);
 void sb_close_server(sb_Server *srv);
-int sb_poll_server(sb_Server *srv);
+int sb_poll_server(sb_Server *srv, int timeout);
 int sb_send_status(sb_Stream *st, int code, const char *msg);
 int sb_send_header(sb_Stream *st, const char *field, const char *val);
 int sb_send_file(sb_Stream *st, const char *filename);
