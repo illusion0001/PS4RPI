@@ -1,4 +1,4 @@
-#include "net.h"
+#include "net_fix.h"
 
 #include <orbis/libkernel.h>
 #include <orbis/NetCtl.h>
@@ -18,19 +18,19 @@ bool net_init(void) {
 
 	ret = sceNetCtlInit();
 	if (ret) {
-		EPRINTF("sceNetCtlInit failed: 0x%08X\n", ret);
+		KernelPrintOut("sceNetCtlInit failed: 0x%08X\n", ret);
 		goto err;
 	}
 
 	ret = sceNetInit();
 	if (ret) {
-		EPRINTF("sceNetInit failed: 0x%08X\n", sceNetErrnoLoc);
+		KernelPrintOut("sceNetInit failed: 0x%08X\n", sceNetErrnoLoc);
 		goto err_netctl_terminate;
 	}
 
 	ret = sceNetPoolCreate("remote_pkg_inst_net_pool", NET_HEAP_SIZE, 0);
 	if (ret < 0) {
-		EPRINTF("sceNetPoolCreate failed: 0x%08X\n", sceNetErrnoLoc);
+		KernelPrintOut("sceNetPoolCreate failed: 0x%08X\n", sceNetErrnoLoc);
 		goto err_net_terminate;
 	}
 	s_libnet_mem_id = ret;
@@ -43,14 +43,14 @@ done:
 err_pool_destroy:
 	ret = sceNetPoolDestroy(s_libnet_mem_id);
 	if (ret < 0) {
-		EPRINTF("sceNetPoolDestroy failed: 0x%08X\n", sceNetErrnoLoc());
+		KernelPrintOut("sceNetPoolDestroy failed: 0x%08X\n", sceNetErrnoLoc());
 	}
 	s_libnet_mem_id = -1;
 
 err_net_terminate:
 	ret = sceNetTerm();
 	if (ret) {
-		EPRINTF("sceNetTerm failed: 0x%08X\n", sceNetErrnoLoc());
+		KernelPrintOut("sceNetTerm failed: 0x%08X\n", sceNetErrnoLoc());
 	}
 
 err_netctl_terminate:
@@ -81,13 +81,13 @@ void net_fini(void) {
 
 	ret = sceNetPoolDestroy(s_libnet_mem_id);
 	if (ret < 0) {
-		EPRINTF("sceNetPoolDestroy failed: 0x%08X\n", sceNetErrnoLoc());
+		KernelPrintOut("sceNetPoolDestroy failed: 0x%08X\n", sceNetErrnoLoc());
 	}
 	s_libnet_mem_id = -1;
 
 	ret = sceNetTerm();
 	if (ret < 0) {
-		EPRINTF("sceNetTerm failed: 0x%08X\n", sceNetErrnoLoc());
+		KernelPrintOut("sceNetTerm failed: 0x%08X\n", sceNetErrnoLoc());
 	}
 
 	sceNetCtlTerm();
@@ -107,7 +107,7 @@ int net_get_ipv4(char* buf, size_t buf_size) {
 	memset(&info, 0, sizeof(info));
 	ret = sceNetCtlGetInfo(ORBIS_NET_CTL_INFO_IP_ADDRESS, &info);
 	if (ret) {
-		EPRINTF("sceNetCtlGetInfo failed: 0x%08X\n", ret);
+		KernelPrintOut("sceNetCtlGetInfo failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -128,7 +128,7 @@ int net_send_all(int sock_id, const void* data, size_t size, size_t* sent) {
 
 		ret = sceNetSend(sock_id, ptr, cur_size, 0);
 		if (ret < 0) {
-			EPRINTF("sceNetSend failed: 0x%08X\n", sceNetErrnoLoc());
+			KernelPrintOut("sceNetSend failed: 0x%08X\n", sceNetErrnoLoc());
 			goto err;
 		}
 		if (ret == 0) {
@@ -159,7 +159,7 @@ int net_recv_all(int sock_id, void* data, size_t size, size_t* received) {
 
 		ret = sceNetRecv(sock_id, ptr, cur_size, 0);
 		if (ret < 0) {
-			EPRINTF("sceNetRecv failed: 0x%08X\n", sceNetErrnoLoc());
+			KernelPrintOut("sceNetRecv failed: 0x%08X\n", sceNetErrnoLoc());
 			goto err;
 		}
 		if (ret == 0) {

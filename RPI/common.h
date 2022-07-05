@@ -12,8 +12,26 @@
 #include <inttypes.h>
 #include <unistd.h>
 
-#include "syscalls.h"
-#include "KPutil.h"
+#include "utlist.h"
+#include "util.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define SYS_unmount 22
+#define	SYS_getdents 272
+#define	SYS_nmount 378
+#define SYS_supercall 394
+#define SYS_gain_privileges 410
+#define SYS_dynlib_get_info 593
+#define SYS_dynlib_get_info_ex 608
+
+// int syscall(int num, ...);
+
+#ifdef __cplusplus
+}
+#endif
 
 #define STRINGIFY(x) #x
 #define STRINGIFY_DEEP(x) STRINGIFY(x)
@@ -27,11 +45,6 @@
 #define ALIGN_DOWN(x, alignment) ((x) & ~((alignment) - 1))
 
 #define UNUSED(x) (void)(x)
-#if 1
-#	define EPRINTF(msg, ...) KernelPrintOut("Error at %s:%s(%d): " msg, __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
-#else
-#	define EPRINTF(msg, ...)
-#endif
 
 #define SWAP16(x) \
 	((uint16_t)( \

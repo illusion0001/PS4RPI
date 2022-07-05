@@ -1,5 +1,5 @@
 #include "pkg.h"
-#include "http.h"
+#include "http_fix.h"
 #include "util.h"
 
 #include <orbis/libkernel.h>
@@ -91,66 +91,66 @@ char** pkg_extract_piece_urls_from_ref_pkg_json(const char* url, size_t* piece_c
 	size_t i;
 
 	if (!url) {
-		EPRINTF("No URL specified.\n");
+		KernelPrintOut("No URL specified.\n");
 		goto err;
 	}
 
 	//printf("Downloading reference package json: %s\n", url);
 	if (!http_download_file(url, (uint8_t**)&data, &size, &total_size, 0)) {
-		EPRINTF("Unable to download reference package json '%s'.\n", url);
+		KernelPrintOut("Unable to download reference package json '%s'.\n", url);
 		goto err;
 	}
 	//printf("Reference package json total size: 0x%" PRIX64 "\n", total_size);
 	if (total_size == 0) {
-		EPRINTF("Empty reference package json.\n");
+		KernelPrintOut("Empty reference package json.\n");
 		goto err;
 	}
 
 	pool = (json_t*)malloc(sizeof(*pool) * pool_size);
 	if (!pool) {
-		EPRINTF("No memory.\n");
+		KernelPrintOut("No memory.\n");
 		goto err;
 	}
 	memset(pool, 0, sizeof(*pool) * pool_size);
 
 	root = json_create(data, pool, pool_size);
 	if (!root) {
-		EPRINTF("Invalid JSON format.\n");
+		KernelPrintOut("Invalid JSON format.\n");
 		goto err;
 	}
 
 	field = json_getProperty(root, "pieces");
 	if (!field) {
-		EPRINTF("No '%s' parameter found.\n", "pieces");
+		KernelPrintOut("No '%s' parameter found.\n", "pieces");
 		goto err;
 	}
 	if (json_getType(field) != JSON_ARRAY) {
-		EPRINTF("Invalid type for parameter '%s'.\n", "pieces");
+		KernelPrintOut("Invalid type for parameter '%s'.\n", "pieces");
 		goto err;
 	}
 	for (val.jval = json_getChild(field), count = 0; val.jval != NULL; val.jval = json_getSibling(val.jval)) {
 		if (json_getType(val.jval) != JSON_OBJ) {
-			EPRINTF("Invalid type for element of parameter '%s'.\n", "pieces");
+			KernelPrintOut("Invalid type for element of parameter '%s'.\n", "pieces");
 			goto err;
 		}
 
 		prop_val = json_getPropertyValue(val.jval, "url");
 		if (!prop_val) {
-			EPRINTF("No '%s' property found in element of parameter '%s'.\n", "url", "pieces");
+			KernelPrintOut("No '%s' property found in element of parameter '%s'.\n", "url", "pieces");
 			goto err;
 		}
 		if (strlen(prop_val) == 0) {
-			EPRINTF("Empty value of property '%s' in element of parameter '%s'.\n", "url", "pieces");
+			KernelPrintOut("Empty value of property '%s' in element of parameter '%s'.\n", "url", "pieces");
 			goto err;
 		}
 
 		if (!http_unescape_uri(&unescaped_url, &unescaped_url_size, prop_val)) {
-			EPRINTF("Unable to unescape value of property '%s' in element of parameter '%s'.\n", "url", "pieces");
+			KernelPrintOut("Unable to unescape value of property '%s' in element of parameter '%s'.\n", "url", "pieces");
 			goto err;
 		}
 
 		if (!starts_with(unescaped_url, "http://") && !starts_with(unescaped_url, "https://")) {
-			EPRINTF("Unexpected value of property '%s' in element of parameter '%s'.\n", "url", "pieces");
+			KernelPrintOut("Unexpected value of property '%s' in element of parameter '%s'.\n", "url", "pieces");
 			goto err;
 		}
 
@@ -160,13 +160,13 @@ char** pkg_extract_piece_urls_from_ref_pkg_json(const char* url, size_t* piece_c
 		++count;
 	}
 	if (count == 0) {
-		EPRINTF("No pieces.\n");
+		KernelPrintOut("No pieces.\n");
 		goto err;
 	}
 
 	piece_urls = (char**)malloc(count * sizeof(*piece_urls));
 	if (!piece_urls) {
-		EPRINTF("No memory.\n");
+		KernelPrintOut("No memory.\n");
 		goto err;
 	}
 	memset(piece_urls, 0, count * sizeof(*piece_urls));
@@ -175,7 +175,7 @@ char** pkg_extract_piece_urls_from_ref_pkg_json(const char* url, size_t* piece_c
 		prop_val = json_getPropertyValue(val.jval, "url");
 
 		if (!http_unescape_uri(&unescaped_url, &unescaped_url_size, prop_val)) {
-			EPRINTF("Unable to unescape value of property '%s' in element of parameter '%s'.\n", "url", "pieces");
+			KernelPrintOut("Unable to unescape value of property '%s' in element of parameter '%s'.\n", "url", "pieces");
 			goto err;
 		}
 
@@ -224,7 +224,7 @@ err:
 	do { \
 		if (error_buf) \
 			snprintf(error_buf, error_buf_size, format, ##__VA_ARGS__); \
-		EPRINTF(format, ##__VA_ARGS__); \
+		KernelPrintOut(format, ##__VA_ARGS__); \
 	} while (0)
 
 bool pkg_setup_prerequisites(char** piece_urls, size_t piece_count, const char* ref_pkg_json_path, const char* param_sfo_path, const char* icon0_png_path, enum pkg_content_type* content_type, uint64_t* package_size, bool* is_patch, bool* has_icon, char* error_buf, size_t error_buf_size) {

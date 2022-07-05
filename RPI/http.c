@@ -1,10 +1,9 @@
-#include "http.h"
+#include "net_fix.h"
+#include "ssl_fix.h"
+#include "http_fix.h"
 
 #include <orbis/NpCommon.h>
 #include <orbis/NpUtility.h>
-
-#include "net.h"
-#include "ssl.h"
 
 #define HTTP_HEAP_SIZE (1024 * 1024)
 #define SSL_HEAP_SIZE (128 * 1024)
@@ -51,14 +50,14 @@ bool http_init(void)
 
 	ret = sceSslInit(SSL_HEAP_SIZE);
 	if (ret < 0) {
-		EPRINTF("sceSslInit failed: 0x%08X\n", ret);
+		KernelPrintOut("sceSslInit failed: 0x%08X\n", ret);
 		goto err;
 	}
 	s_libssl_ctx_id = ret;
 
 	ret = sceHttpInit(net_get_mem_id(), s_libssl_ctx_id, HTTP_HEAP_SIZE);
 	if (ret < 0) {
-		EPRINTF("sceHttpInit failed: 0x%08X\n", ret);
+		KernelPrintOut("sceHttpInit failed: 0x%08X\n", ret);
 		goto err;
 	}
 	s_libhttp_ctx_id = ret;
@@ -71,14 +70,14 @@ done:
 err_http_terminate:
 	ret = sceHttpTerm(s_libhttp_ctx_id);
 	if (ret) {
-		EPRINTF("sceHttpTerm failed: 0x%08X\n", ret);
+		KernelPrintOut("sceHttpTerm failed: 0x%08X\n", ret);
 	}
 	s_libhttp_ctx_id = -1;
 
 err_ssl_terminate:
 	ret = sceSslTerm(s_libssl_ctx_id);
 	if (ret) {
-		EPRINTF("sceSslTerm failed: 0x%08X\n", ret);
+		KernelPrintOut("sceSslTerm failed: 0x%08X\n", ret);
 	}
 	s_libssl_ctx_id = -1;
 
@@ -95,13 +94,13 @@ void http_fini(void) {
 
 	ret = sceHttpTerm(s_libhttp_ctx_id);
 	if (ret) {
-		EPRINTF("sceHttpTerm failed: 0x%08X\n", ret);
+		KernelPrintOut("sceHttpTerm failed: 0x%08X\n", ret);
 	}
 	s_libhttp_ctx_id = -1;
 
 	ret = sceSslTerm(s_libssl_ctx_id);
 	if (ret) {
-		EPRINTF("sceSslTerm failed: 0x%08X\n", ret);
+		KernelPrintOut("sceSslTerm failed: 0x%08X\n", ret);
 	}
 	s_libssl_ctx_id = -1;
 
@@ -227,20 +226,20 @@ bool http_escape_uri(char** out, size_t* out_size, const char* in) {
 
 	ret = sceHttpUriEscape(NULL, &tmp_size, 0, in);
 	if (ret) {
-		EPRINTF("sceHttpUriEscape failed: 0x%08X\n", ret);
+		KernelPrintOut("sceHttpUriEscape failed: 0x%08X\n", ret);
 		goto err;
 	}
 
 	tmp = (char*)malloc(tmp_size);
 	if (!tmp) {
-		EPRINTF("malloc failed\n");
+		KernelPrintOut("malloc failed\n");
 		goto err;
 	}
 	memset(tmp, 0, tmp_size);
 
 	ret = sceHttpUriEscape(tmp, out_size, tmp_size, in);
 	if (ret) {
-		EPRINTF("sceHttpUriEscape failed: 0x%08X\n", ret);
+		KernelPrintOut("sceHttpUriEscape failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -275,20 +274,20 @@ bool http_unescape_uri(char** out, size_t* out_size, const char* in) {
 
 	ret = sceHttpUriUnescape(NULL, &tmp_size, 0, in);
 	if (ret) {
-		EPRINTF("sceHttpUriUnescape failed: 0x%08X\n", ret);
+		KernelPrintOut("sceHttpUriUnescape failed: 0x%08X\n", ret);
 		goto err;
 	}
 
 	tmp = (char*)malloc(tmp_size);
 	if (!tmp) {
-		EPRINTF("malloc failed\n");
+		KernelPrintOut("malloc failed\n");
 		goto err;
 	}
 	memset(tmp, 0, tmp_size);
 
 	ret = sceHttpUriUnescape(tmp, out_size, tmp_size, in);
 	if (ret) {
-		EPRINTF("sceHttpUriUnescape failed: 0x%08X\n", ret);
+		KernelPrintOut("sceHttpUriUnescape failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -323,7 +322,7 @@ bool http_escape_json_string(char* out, size_t max_out_size, const char* in) {
 
 	ret = sceNpUtilJsonEscape(out, max_out_size, in, strlen(in));
 	if (ret) {
-		EPRINTF("sceNpUtilJsonEscape failed: 0x%08X\n", ret);
+		KernelPrintOut("sceNpUtilJsonEscape failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -391,7 +390,7 @@ static int download_file_cb(void* arg, int req_id, int status_code, uint64_t con
 		}
 		ret = sceHttpReadData(req_id, chunk, chunk_size);
 		if (ret < 0) {
-			EPRINTF("sceHttpReadData failed: 0x%08X\n", ret);
+			KernelPrintOut("sceHttpReadData failed: 0x%08X\n", ret);
 			goto err_partial_xfer;
 		} else if (ret == 0){
 			break;
@@ -432,21 +431,21 @@ static int do_request(const char* url, int method, const void* data, size_t data
 
 	ret = sceHttpCreateTemplate(s_libhttp_ctx_id, USER_AGENT, ORBIS_HTTP_VERSION_1_1, 1);
 	if (ret < 0) {
-		EPRINTF("sceHttpCreateTemplate failed: 0x%08X\n", ret);
+		KernelPrintOut("sceHttpCreateTemplate failed: 0x%08X\n", ret);
 		goto err;
 	}
 	tpl_id = ret;
 
 	ret = sceHttpCreateConnectionWithURL(tpl_id, url, 1);
 	if (ret < 0) {
-		EPRINTF("sceHttpCreateConnectionWithURL failed: 0x%08X\n", ret);
+		KernelPrintOut("sceHttpCreateConnectionWithURL failed: 0x%08X\n", ret);
 		goto err_tpl_delete;
 	}
 	conn_id = ret;
 
 	ret = sceHttpCreateRequestWithURL(conn_id, method, url, data ? data_size : 0);
 	if (ret < 0) {
-		EPRINTF("sceHttpCreateRequestWithURL failed: 0x%08X\n", ret);
+		KernelPrintOut("sceHttpCreateRequestWithURL failed: 0x%08X\n", ret);
 		goto err_conn_delete;
 	}
 	req_id = ret;
@@ -458,7 +457,7 @@ static int do_request(const char* url, int method, const void* data, size_t data
 	ret = sceHttpsDisableOption(tpl_id, ssl_flags);
 	if (ret) {
 #if 0 /* TODO: figure out */
-		EPRINTF("sceHttpsDisableOption failed: 0x%08X\n", ret);
+		KernelPrintOut("sceHttpsDisableOption failed: 0x%08X\n", ret);
 		goto err;
 #endif
 	}
@@ -466,27 +465,27 @@ static int do_request(const char* url, int method, const void* data, size_t data
 	for (i = 0; i < header_count; ++i) {
 		ret = sceHttpAddRequestHeader(req_id, headers[i * 2 + 0], headers[i * 2 + 1], SCE_HTTP_HEADER_OVERWRITE);
 		if (ret) {
-			EPRINTF("sceHttpAddRequestHeader failed: 0x%08X\n", ret);
+			KernelPrintOut("sceHttpAddRequestHeader failed: 0x%08X\n", ret);
 			goto err_req_delete;
 		}
 	}
 
 	ret = sceHttpSendRequest(req_id, data, data ? data_size : 0);
 	if (ret) {
-		EPRINTF("sceHttpSendRequest failed: 0x%08X\n", ret);
+		KernelPrintOut("sceHttpSendRequest failed: 0x%08X\n", ret);
 		goto err_req_delete;
 	}
 
 	ret = sceHttpGetStatusCode(req_id, &status_code);
 	if (ret < 0) {
-		EPRINTF("sceHttpGetStatusCode failed: 0x%08X\n", ret);
+		KernelPrintOut("sceHttpGetStatusCode failed: 0x%08X\n", ret);
 		goto err_req_delete;
 	}
 
 	if (is_good_status(status_code)) {
 		ret = sceHttpGetResponseContentLength(req_id, &content_length_type, &content_length);
 		if (ret) {
-			EPRINTF("sceHttpGetResponseContentLength failed: 0x%08X\n", ret);
+			KernelPrintOut("sceHttpGetResponseContentLength failed: 0x%08X\n", ret);
 			goto err_req_delete;
 		}
 	}
@@ -500,19 +499,19 @@ static int do_request(const char* url, int method, const void* data, size_t data
 err_req_delete:
 	ret = sceHttpDeleteRequest(req_id);
 	if (ret) {
-		EPRINTF("sceHttpDeleteRequest failed: 0x%08X\n", ret);
+		KernelPrintOut("sceHttpDeleteRequest failed: 0x%08X\n", ret);
 	}
 
 err_conn_delete:
 	ret = sceHttpDeleteConnection(conn_id);
 	if (ret) {
-		EPRINTF("sceHttpDeleteConnection failed: 0x%08X\n", ret);
+		KernelPrintOut("sceHttpDeleteConnection failed: 0x%08X\n", ret);
 	}
 
 err_tpl_delete:
 	ret = sceHttpDeleteTemplate(tpl_id);
 	if (ret) {
-		EPRINTF("sceHttpDeleteTemplate failed: 0x%08X\n", ret);
+		KernelPrintOut("sceHttpDeleteTemplate failed: 0x%08X\n", ret);
 	}
 
 err:

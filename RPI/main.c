@@ -1,15 +1,14 @@
 ﻿#include "installer.h"
-#include "net.h"
-#include "http.h"
+#include "net_fix.h"
+#include "http_fix.h"
 #include "server.h"
 #include "util.h"
-#include "KPutil.h"
 
 #include <orbis/libkernel.h>
 #include <orbis/Sysmodule.h>
 #include <orbis/SystemService.h>
 #include <orbis/ShellUIUtil.h>
-#include <orbis/userservice.h>
+#include <orbis/UserService.h>
 
 #define SERVER_PORT (12801)
 
@@ -67,7 +66,7 @@ void Jailbreak()
 {
 	// unjail
 	int urmom = 0;
-	int32_t handlejbc = sceKernelLoadStartModule("/app0/sce_module/libjbc.prx", NULL, NULL, NULL, NULL, NULL);
+	int32_t handlejbc = sceKernelLoadStartModule("/app0/sce_module/libjbc.prx", 0, NULL, 0, NULL, NULL);
 	KernelPrintOut("libjbc handle is 0x%lx\n", handlejbc);
 
 	if (handlejbc > 0)
@@ -104,7 +103,7 @@ int main(int argc, const char* const argv[])
 	Jailbreak();
 
 	if (!load_modules()) {
-		EPRINTF("Unable to load modules.\n");
+		KernelPrintOut("Unable to load modules.\n");
 		goto err;
 	}
 
@@ -112,7 +111,7 @@ int main(int argc, const char* const argv[])
 	//printf("Initializing user service...\n");
 	ret = sceUserServiceInitialize(NULL);
 	if (ret) {
-		EPRINTF("User service initialization failed.\n");
+		KernelPrintOut("User service initialization failed.\n");
 		goto err;
 	}
 
@@ -121,43 +120,45 @@ int main(int argc, const char* const argv[])
 
 	//printf("Initializing AppInstUtil...\n");
 	if (!app_inst_util_init()) {
-		EPRINTF("AppInstUtil initialization failed.\n");
+		KernelPrintOut("AppInstUtil initialization failed.\n");
 		goto err_user_service_terminate;
 	}
 
 	//printf("Initializing BGFT...\n");
 	if (!bgft_init()) {
-		EPRINTF("BGFT initialization failed.\n");
+		KernelPrintOut("BGFT initialization failed.\n");
 		goto err_appinstutil_finalize;
 	}
 
 	//printf("Initializing net...\n");
 	if (!net_init()) {
-		EPRINTF("Net initialization failed.\n");
+		KernelPrintOut("Net initialization failed.\n");
 		goto err_bgft_finalize;
 	}
 
 	ret = net_get_ipv4(ip_address, sizeof(ip_address));
 	if (ret) {
-		EPRINTF("Unable to get IP address: 0x%08X\n", ret);
+		KernelPrintOut("Unable to get IP address: 0x%08X\n", ret);
 		goto err_net_finalize;
 	}
 
 	//printf("Initializing HTTP/SSL...\n");
 	 if (!http_init()) {
-	 	EPRINTF("HTTP/SSL initialization failed.\n");
+	 	KernelPrintOut("HTTP/SSL initialization failed.\n");
 		goto err_net_finalize;
 	 }
 
 	//printf("Starting server...\n");
 	if (!server_start(ip_address, SERVER_PORT, work_dir)) {
-		EPRINTF("Server start failed.\n");
+		KernelPrintOut("Server start failed.\n");
 		goto err_http_finalize;
 	}
 
 	printf("Listening for incoming connections on %s:%d...\n", ip_address, SERVER_PORT);
-	Notify("RPI\nIP:     %s\nPort: %i", ip_address, SERVER_PORT);
-	if (!server_listen()) {
+	Notify("RPI Server Listening on\nIP: %s Port: %i", ip_address, SERVER_PORT);
+	if (!server_listen())
+	{
+		Notify("RPI Server Listen Failed");
 		goto err_server_stop;
 	}
 
@@ -185,7 +186,7 @@ err_user_service_terminate:
 	//printf("Terminating user service...\n");
 	ret = sceUserServiceTerminate();
 	if (ret) {
-		EPRINTF("sceUserServiceTerminate failed: 0x%08X\n", ret);
+		KernelPrintOut("sceUserServiceTerminate failed: 0x%08X\n", ret);
 	}
 
 err:;
@@ -204,61 +205,61 @@ static bool load_modules(void) {
 
 	ret = sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_SYSCORE);
 	if (ret) {
-		EPRINTF("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SYS_CORE), ret);
+		KernelPrintOut("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SYS_CORE), ret);
 		goto err;
 	}
 
 	ret = sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_SYSTEM_SERVICE);
 	if (ret) {
-		EPRINTF("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SYSTEM_SERVICE), ret);
+		KernelPrintOut("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SYSTEM_SERVICE), ret);
 		goto err_unload_sys_core;
 	}
 
 	ret = sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_USER_SERVICE);
 	if (ret) {
-		EPRINTF("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_USER_SERVICE), ret);
+		KernelPrintOut("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_USER_SERVICE), ret);
 		goto err_unload_system_service;
 	}
 
 	ret = sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_NETCTL);
 	if (ret) {
-		EPRINTF("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NETCTL), ret);
+		KernelPrintOut("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NETCTL), ret);
 		goto err_unload_user_service;
 	}
 
 	ret = sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_NET);
 	if (ret) {
-		EPRINTF("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NET), ret);
+		KernelPrintOut("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NET), ret);
 		goto err_unload_netctl;
 	}
 
 	ret = sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_HTTP);
 	if (ret) {
-		EPRINTF("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_HTTP), ret);
+		KernelPrintOut("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_HTTP), ret);
 		goto err_unload_net;
 	}
 
 	ret = sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_SSL);
 	if (ret) {
-		EPRINTF("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SSL), ret);
+		KernelPrintOut("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SSL), ret);
 		goto err_unload_http;
 	}
 
 	ret = sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_APP_INST_UTIL);
 	if (ret) {
-		EPRINTF("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_APPINSTUTIL), ret);
+		KernelPrintOut("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_APPINSTUTIL), ret);
 		goto err_unload_ssl;
 	}
 
 	ret = sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_BGFT);
 	if (ret) {
-		EPRINTF("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_BGFT), ret);
+		KernelPrintOut("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_BGFT), ret);
 		goto err_unload_appinstutil;
 	}
 
 	ret = sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_NP_COMMON);
 	if (ret) {
-		EPRINTF("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NP_COMMON), ret);
+		KernelPrintOut("sceSysmoduleLoadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NP_COMMON), ret);
 		goto err_unload_bgft;
 	}
 
@@ -270,61 +271,61 @@ done:
 err_unload_np_common:
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_NP_COMMON);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NP_COMMON), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NP_COMMON), ret);
 	}
 
 err_unload_bgft:
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_BGFT);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_BGFT), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_BGFT), ret);
 	}
 
 err_unload_appinstutil:
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_APP_INST_UTIL);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_APPINSTUTIL), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_APPINSTUTIL), ret);
 	}
 
 err_unload_ssl:
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_SSL);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SSL), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SSL), ret);
 	}
 
 err_unload_http:
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_HTTP);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_HTTP), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_HTTP), ret);
 	}
 
 err_unload_net:
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_NET);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NET), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NET), ret);
 	}
 
 err_unload_netctl:
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_NETCTL);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NETCTL), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NETCTL), ret);
 	}
 
 err_unload_user_service:
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_USER_SERVICE);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_USER_SERVICE), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_USER_SERVICE), ret);
 	}
 
 err_unload_system_service:
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_SYSTEM_SERVICE);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SYSTEM_SERVICE), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SYSTEM_SERVICE), ret);
 	}
 
 err_unload_sys_core:
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_SYSCORE);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SYS_CORE), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SYS_CORE), ret);
 	}
 
 err:
@@ -340,52 +341,52 @@ static void unload_modules(void) {
 
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_NP_COMMON);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NP_COMMON), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NP_COMMON), ret);
 	}
 
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_BGFT);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_BGFT), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_BGFT), ret);
 	}
 
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_APP_INST_UTIL);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_APPINSTUTIL), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_APPINSTUTIL), ret);
 	}
 
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_SSL);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SSL), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SSL), ret);
 	}
 
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_HTTP);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_HTTP), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_HTTP), ret);
 	}
 
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_NET);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NET), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NET), ret);
 	}
 
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_NETCTL);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NETCTL), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_NETCTL), ret);
 	}
 
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_USER_SERVICE);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_USER_SERVICE), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_USER_SERVICE), ret);
 	}
 
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_SYSTEM_SERVICE);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SYSTEM_SERVICE), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SYSTEM_SERVICE), ret);
 	}
 
 	ret = sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_SYSCORE);
 	if (ret) {
-		EPRINTF("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SYS_CORE), ret);
+		KernelPrintOut("sceSysmoduleUnloadModuleInternal(%s) failed: 0x%08X\n", STRINGIFY_DEEP(ORBIS_SYSMODULE_INTERNAL_SYS_CORE), ret);
 	}
 
 	s_modules_loaded = false;

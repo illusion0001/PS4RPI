@@ -8,9 +8,9 @@
 #include "installer.h"
 #include "pkg.h"
 #include "sfo.h"
-#include "http.h"
+#include "http_fix.h"
 #include "util.h"
-#include "dirent.h"
+#include "dirent_fix.h"
 #include "sandbird.h"
 #include "tiny-json.h"
 
@@ -114,14 +114,14 @@ bool server_start(const char* ip_address, int port, const char* work_dir) {
 	}
 
 	if (!ip_address || strlen(ip_address) == 0) {
-		EPRINTF("Empty IP address specified.\n");
+		KernelPrintOut("Empty IP address specified.\n");
 		goto err;
 	}
 	s_ip_address = strdup(ip_address);
 	s_port = port;
 
 	if (!work_dir || strlen(work_dir) == 0) {
-		EPRINTF("Empty working directory specified.\n");
+		KernelPrintOut("Empty working directory specified.\n");
 		goto err_free_ip_address;
 	}
 	s_work_dir = strdup(work_dir);
@@ -141,7 +141,7 @@ bool server_start(const char* ip_address, int port, const char* work_dir) {
 
 	s_server = sb_new_server(&opts);
 	if (!s_server) {
-		EPRINTF("Unable to initialize server.\n");
+		KernelPrintOut("Unable to initialize server.\n");
 		goto err_work_dir_free;
 	}
 
@@ -168,7 +168,7 @@ bool server_listen(void) {
 	}
 
 	for (;;) {
-		sb_poll_server(s_server);
+		sb_poll_server(s_server, 1000);
 	}
 
 	return true;
@@ -1566,7 +1566,7 @@ static void cleanup_temp_files(void) {
 
 	fd = ret = sceKernelOpen(s_work_dir, O_RDONLY, 0);
 	if (ret < 0) {
-		EPRINTF("sceKernelOpen failed: 0x%08X\n", ret);
+		KernelPrintOut("sceKernelOpen failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -1575,7 +1575,7 @@ static void cleanup_temp_files(void) {
 
 		ret = sceKernelGetdents(fd, buf, sizeof(buf));
 		if (ret < 0) {
-			EPRINTF("sceKernelGetdents failed: 0x%08X\n", ret);
+			KernelPrintOut("sceKernelGetdents failed: 0x%08X\n", ret);
 			goto err;
 		}
 		if (ret == 0) {
@@ -1593,12 +1593,12 @@ static void cleanup_temp_files(void) {
 				if (starts_with(entry->d_name, "tmp_") && (ends_with(entry->d_name, ".json") || ends_with(entry->d_name, ".sfo") || ends_with(entry->d_name, ".png"))) {
 					ret = sceKernelStat(full_path, &stat_buf);
 					if (ret) {
-						EPRINTF("sceKernelStat failed: 0x%08X\n", ret);
+						KernelPrintOut("sceKernelStat failed: 0x%08X\n", ret);
 						goto err;
 					}
 
-					if (timespec_compare(&now, &stat_buf.st_atime) >= 0) {
-						timespec_sub(&diff, &now, &stat_buf.st_atime);
+					if (timespec_compare(&now, &stat_buf.st_atim) >= 0) {
+						timespec_sub(&diff, &now, &stat_buf.st_atim);
 
 						if (diff.tv_sec >= (long)CLEANUP_DAY_COUNT * 24 * 60 * 60) {
 							unlink(full_path);
@@ -1615,7 +1615,7 @@ err:
 	if (fd > 0) {
 		ret = sceKernelClose(fd);
 		if (ret) {
-			EPRINTF("sceKernelClose failed: 0x%08X\n", ret);
+			KernelPrintOut("sceKernelClose failed: 0x%08X\n", ret);
 		}
 	}
 }

@@ -85,35 +85,35 @@ bool sfo_load_from_file(struct sfo* sfo, const char* file_path) {
 
 	fd = open(file_path, O_RDONLY);
 	if (fd < 0) {
-		EPRINTF("Unable to open file.\n");
+		KernelPrintOut("Unable to open file.\n");
 		goto err;
 	}
 
 	ret = fstat(fd, &stats);
 	if (ret < 0) {
-		EPRINTF("Unable to get file information.\n");
+		KernelPrintOut("Unable to get file information.\n");
 		goto err;
 	}
 	data_size = (size_t)stats.st_size;
 
 	data = (uint8_t*)malloc(data_size);
 	if (!data) {
-		EPRINTF("Unable to allocate memory of 0x%" PRIuMAX " bytes.\n", (uintmax_t)data_size);
+		KernelPrintOut("Unable to allocate memory of 0x%" PRIuMAX " bytes.\n", (uintmax_t)data_size);
 		goto err;
 	}
 
 	nread = read(fd, data, data_size);
 	if (nread < 0) {
-		EPRINTF("Unable to read file.\n");
+		KernelPrintOut("Unable to read file.\n");
 		goto err;
 	}
 	if ((size_t)nread != data_size) {
-		EPRINTF("Insufficient data read.\n");
+		KernelPrintOut("Insufficient data read.\n");
 		goto err;
 	}
 
 	if (!sfo_load_from_memory(sfo, data, data_size)) {
-		EPRINTF("Unable to load system file object.\n");
+		KernelPrintOut("Unable to load system file object.\n");
 		goto err;
 	}
 
@@ -146,20 +146,20 @@ bool sfo_load_from_memory(struct sfo* sfo, const void* data, size_t data_size) {
 	assert(data != NULL);
 
 	if (data_size < sizeof(*hdr)) {
-		EPRINTF("Insufficient data.\n");
+		KernelPrintOut("Insufficient data.\n");
 		goto err;
 	}
 
 	hdr = (struct sfo_header*)data;
 	if (memcmp(hdr->magic, SFO_MAGIC, sizeof(hdr->magic)) != 0) {
-		EPRINTF("Invalid system file object format.\n");
+		KernelPrintOut("Invalid system file object format.\n");
 		goto err;
 	}
 
 	entry_table = (struct sfo_table_entry*)(data + sizeof(*hdr));
 	entry_count = LE32(hdr->entry_count);
 	if (data_size < sizeof(*hdr) + entry_count * sizeof(*entry_table)) {
-		EPRINTF("Insufficient data.\n");
+		KernelPrintOut("Insufficient data.\n");
 		goto err;
 	}
 
@@ -171,7 +171,7 @@ bool sfo_load_from_memory(struct sfo* sfo, const void* data, size_t data_size) {
 
 		new_entry = (struct sfo_entry*)malloc(sizeof(*new_entry));
 		if (!new_entry) {
-			EPRINTF("Unable to allocate memory for entry.\n");
+			KernelPrintOut("Unable to allocate memory for entry.\n");
 			goto err;
 		}
 		memset(new_entry, 0, sizeof(*new_entry));
@@ -181,19 +181,19 @@ bool sfo_load_from_memory(struct sfo* sfo, const void* data, size_t data_size) {
 		new_entry->size = LE32(entry->size);
 		new_entry->area = LE32(entry->max_size);
 		if (new_entry->area < new_entry->size) {
-			EPRINTF("Unexpected entry sizes.\n");
+			KernelPrintOut("Unexpected entry sizes.\n");
 			goto err;
 		}
 
 		new_entry->key = strdup(key_table + LE16(entry->key_offset));
 		if (!new_entry->key) {
-			EPRINTF("Unable to allocate memory for entry key.\n");
+			KernelPrintOut("Unable to allocate memory for entry key.\n");
 			goto err;
 		}
 
 		new_entry->value = (uint8_t*)malloc(new_entry->area);
 		if (!new_entry->value) {
-			EPRINTF("Unable to allocate memory for entry value.\n");
+			KernelPrintOut("Unable to allocate memory for entry value.\n");
 			goto err;
 		}
 		memset(new_entry->value, 0, new_entry->area);

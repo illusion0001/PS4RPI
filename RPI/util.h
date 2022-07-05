@@ -2,6 +2,10 @@
 
 #include "common.h"
 
+void Notify(const char* FMT, ...);
+void KernelPrintOut(const char* FMT, ...);
+void SafeExit(const char* reason, ...);
+
 bool get_language_id(int* lang_id);
 
 int bytes_to_hex(char* buf, size_t buf_size, const void* data, size_t data_size);

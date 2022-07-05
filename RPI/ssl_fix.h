@@ -1,6 +1,7 @@
 #ifndef _SCE_SSL_H_
 #define _SCE_SSL_H_
 
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus 
@@ -300,8 +301,8 @@ void sceSslSetSslVersion();
 void sceSslSetVerifyCallback();
 // Empty Comment
 void sceSslShowMemoryStat();
-// TODO: pr
-int sceSslTerm();
+// TODO: update
+int sceSslTerm(int);
 // Empty Comment
 void sceSslUnloadCert();
 // Empty Comment

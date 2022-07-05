@@ -1,13 +1,11 @@
 #include "installer.h"
 #include "pkg.h"
 #include "util.h"
-#include "module.h"
-#include "KPutil.h"
 
 #include <orbis/libkernel.h>
-#include <orbis/userservice.h>
+#include <orbis/UserService.h>
 #include <orbis/AppInstUtil.h>
-#include <orbis/bgft.h>
+#include <orbis/Bgft.h>
 #include <sys/param.h>
 
 #define _NDBG 
@@ -46,7 +44,7 @@ bool app_inst_util_init(void) {
 
 	ret = sceAppInstUtilInitialize();
 	if (ret) {
-		EPRINTF("sceAppInstUtilInitialize failed: 0x%08X\n", ret);
+		KernelPrintOut("sceAppInstUtilInitialize failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -70,7 +68,7 @@ void app_inst_util_fini(void) {
 
 	ret = sceAppInstUtilTerminate();
 	if (ret) {
-		EPRINTF("sceAppInstUtilTerminate failed: 0x%08X\n", ret);
+		KernelPrintOut("sceAppInstUtilTerminate failed: 0x%08X\n", ret);
 	}
 
 	s_app_inst_util_initialized = false;
@@ -100,7 +98,7 @@ bool app_inst_util_uninstall_game(const char* title_id, int* error) {
 		if (error) {
 			*error = ret;
 		}
-		EPRINTF("sceAppInstUtilAppUnInstall failed: 0x%08X\n", ret);
+		KernelPrintOut("sceAppInstUtilAppUnInstall failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -139,7 +137,7 @@ invalid_content_id:
 		if (error) {
 			*error = ret;
 		}
-		EPRINTF("sceAppInstUtilAppUnInstallAddcont failed: 0x%08X\n", ret);
+		KernelPrintOut("sceAppInstUtilAppUnInstallAddcont failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -174,7 +172,7 @@ bool app_inst_util_uninstall_patch(const char* title_id, int* error) {
 		if (error) {
 			*error = ret;
 		}
-		EPRINTF("sceAppInstUtilAppUnInstallPat failed: 0x%08X\n", ret);
+		KernelPrintOut("sceAppInstUtilAppUnInstallPat failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -208,7 +206,7 @@ bool app_inst_util_uninstall_theme(const char* content_id, int* error) {
 		if (error) {
 			*error = ret;
 		}
-		EPRINTF("sceAppInstUtilAppUnInstallTheme failed: 0x%08X\n", ret);
+		KernelPrintOut("sceAppInstUtilAppUnInstallTheme failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -243,7 +241,7 @@ bool app_inst_util_is_exists(const char* title_id, bool* exists, int* error) {
 		if (error) {
 			*error = ret;
 		}
-		EPRINTF("sceAppInstUtilAppExists failed: 0x%08X\n", ret);
+		KernelPrintOut("sceAppInstUtilAppExists failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -281,7 +279,7 @@ bool app_inst_util_get_size(const char* title_id, unsigned long* size, int* erro
 		if (error) {
 			*error = ret;
 		}
-		EPRINTF("sceAppInstUtilAppGetSize failed: 0x%08X\n", ret);
+		KernelPrintOut("sceAppInstUtilAppGetSize failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -304,7 +302,7 @@ bool bgft_init(void)
 		s_bgft_init_params.heapSize = BGFT_HEAP_SIZE;
 		s_bgft_init_params.heap = (uint8_t*)malloc(s_bgft_init_params.heapSize);
 		if (!s_bgft_init_params.heap) {
-			EPRINTF("No memory for BGFT heap.\n");
+			KernelPrintOut("No memory for BGFT heap.\n");
 			goto err;
 		}
 		memset(s_bgft_init_params.heap, 0, s_bgft_init_params.heapSize);
@@ -312,7 +310,7 @@ bool bgft_init(void)
 
 	ret = sceBgftServiceIntInit(&s_bgft_init_params);
 	if (ret) {
-		EPRINTF("sceBgftServiceIntInit failed: 0x%08X\n", ret);
+		KernelPrintOut("sceBgftServiceIntInit failed: 0x%08X\n", ret);
 		goto err_bgft_heap_free;
 	}
 
@@ -345,7 +343,7 @@ void bgft_fini(void) {
 
 	ret = sceBgftServiceIntTerm();
 	if (ret) {
-		EPRINTF("sceBgftServiceIntTerm failed: 0x%08X\n", ret);
+		KernelPrintOut("sceBgftServiceIntTerm failed: 0x%08X\n", ret);
 	}
 
 	if (s_bgft_init_params.heap) {
@@ -392,7 +390,7 @@ bool bgft_download_register_package_task(const char* content_id, const char* con
 
 	ret = sceUserServiceGetForegroundUser(&user_id);
 	if (ret) {
-		EPRINTF("sceUserServiceGetForegroundUser failed: 0x%08X\n", ret);
+		KernelPrintOut("sceUserServiceGetForegroundUser failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -430,7 +428,7 @@ bool bgft_download_register_package_task(const char* content_id, const char* con
 			//printf("Package already installed.\n");
 			goto done;
 		}
-		EPRINTF("sceBgftServiceIntDownloadRegisterTask failed: 0x%08X\n", ret);
+		KernelPrintOut("sceBgftServiceIntDownloadRegisterTask failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -469,7 +467,7 @@ bool bgft_download_start_task(int task_id, int* error) {
 		if (error) {
 			*error = ret;
 		}
-		EPRINTF("sceBgftServiceDownloadStartTask failed: 0x%08X\n", ret);
+		KernelPrintOut("sceBgftServiceDownloadStartTask failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -503,7 +501,7 @@ bool bgft_download_stop_task(int task_id, int* error) {
 		if (error) {
 			*error = ret;
 		}
-		EPRINTF("sceBgftServiceDownloadStopTask failed: 0x%08X\n", ret);
+		KernelPrintOut("sceBgftServiceDownloadStopTask failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -537,7 +535,7 @@ bool bgft_download_pause_task(int task_id, int* error) {
 		if (error) {
 			*error = ret;
 		}
-		EPRINTF("sceBgftServiceDownloadPauseTask failed: 0x%08X\n", ret);
+		KernelPrintOut("sceBgftServiceDownloadPauseTask failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -571,7 +569,7 @@ bool bgft_download_resume_task(int task_id, int* error) {
 		if (error) {
 			*error = ret;
 		}
-		EPRINTF("sceBgftServiceDownloadResumeTask failed: 0x%08X\n", ret);
+		KernelPrintOut("sceBgftServiceDownloadResumeTask failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -605,7 +603,7 @@ bool bgft_download_unregister_task(int task_id, int* error) {
 		if (error) {
 			*error = ret;
 		}
-		EPRINTF("sceBgftServiceIntDownloadUnregisterTask failed: 0x%08X\n", ret);
+		KernelPrintOut("sceBgftServiceIntDownloadUnregisterTask failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -641,7 +639,7 @@ bool bgft_download_reregister_task_patch(int old_task_id, int* new_task_id, int*
 		if (error) {
 			*error = ret;
 		}
-		EPRINTF("sceBgftServiceIntDownloadReregisterTaskPatch failed: 0x%08X\n", ret);
+		KernelPrintOut("sceBgftServiceIntDownloadReregisterTaskPatch failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -688,7 +686,7 @@ bool bgft_download_get_task_progress(int task_id, struct bgft_download_task_prog
 		if (error) {
 			*error = ret;
 		}
-		EPRINTF("sceBgftServiceDownloadGetProgress failed: 0x%08X\n", ret);
+		KernelPrintOut("sceBgftServiceDownloadGetProgress failed: 0x%08X\n", ret);
 		goto err;
 	}
 
@@ -747,7 +745,7 @@ bool bgft_download_find_task_by_content_id(const char* content_id, int sub_type,
 		if (error) {
 			*error = ret;
 		}
-		EPRINTF("sceBgftServiceDownloadFindTaskByContentId failed: 0x%08X\n", ret);
+		KernelPrintOut("sceBgftServiceDownloadFindTaskByContentId failed: 0x%08X\n", ret);
 		goto err;
 	}
 
