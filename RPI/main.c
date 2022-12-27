@@ -68,7 +68,7 @@ void Jailbreak()
 {
 	// unjail
 	int urmom = 0;
-	int32_t handlejbc = sceKernelLoadStartModule("/app0/sce_module/libjbc.prx", 0, 0, 0, 0, 0);
+	int32_t handlejbc = sceKernelLoadStartModule("/app0/sce_module/libjbc.prx", 0, 0, 0, NULL, NULL);
 	KernelPrintOut("libjbc handle is 0x%lx\n", handlejbc);
 
 	if (handlejbc > 0)
