@@ -45,4 +45,11 @@ jobs:
         cached: ${{ steps.cache-llvm.outputs.cache-hit }}
 
     - name: Build app
-      run: make && ls
+      run: make
+
+    - name: Push package artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: PS4RPI
+        path: IV0000-KPBR01111_00-AAAAAAAAAAAAAAAA.pkg
+        if-no-files-found: error
