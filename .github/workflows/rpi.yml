@@ -9,12 +9,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - uses: actions/checkout@v3
-    - name: configure
-      run: ./configure
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Set env vars
+      run: |
+        echo "llvm_ver=12.0" >> $GITHUB_ENV
+        echo "sdl_path=SDL-PS4" >> $GITHUB_ENV
+        echo "curl_path=oosdk_libraries/curl-7.64.1" >> $GITHUB_ENV
+        echo "OO_PS4_TOOLCHAIN=${GITHUB_WORKSPACE}/OpenOrbis/PS4Toolchain" >> $GITHUB_ENV
+
+    - name: Cache OpenOrbis Toolchain
+      id: cache-oosdk
+      uses: actions/cache@v3
+      with:
+        path: ${{ env.OO_PS4_TOOLCHAIN }}
+        key: ${{ runner.os }}-oosdk-llvm-${{ env.llvm_ver }}
+
+    # temporary release until 0.53 is released
+    - name: Download OpenOrbis Toolchain
+      if: steps.cache-oosdk.outputs.cache-hit != 'true'
+      run: curl -sL https://github.com/illusion0001/OpenOrbis-PS4-Toolchain/releases/download/0.0.1.416/toolchain.tar.gz | tar xz -C ./
+
     - name: make
       run: make
-    - name: make check
-      run: make check
-    - name: make distcheck
-      run: make distcheck
