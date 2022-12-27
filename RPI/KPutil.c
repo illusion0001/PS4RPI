@@ -1,8 +1,8 @@
-
 #include <orbis/libkernel.h>
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 
 void Notify(const char* FMT, ...)
 {
