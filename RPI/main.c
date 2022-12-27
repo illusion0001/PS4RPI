@@ -9,7 +9,7 @@
 #include <orbis/Sysmodule.h>
 #include <orbis/SystemService.h>
 #include <orbis/ShellUIUtil.h>
-#include <orbis/userservice.h>
+#include <orbis/UserService.h>
 
 #define SERVER_PORT (12801)
 
