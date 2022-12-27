@@ -1,6 +1,6 @@
 #include "util.h"
 #include <orbis/libkernel.h>
-#include <orbis/systemservice.h>
+#include <orbis/SystemService.h>
 #include <ctype.h>
 
 #include <fcntl.h>
