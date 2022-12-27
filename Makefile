@@ -5,7 +5,7 @@ TITLE_ID    := KPBR01111
 CONTENT_ID  := IV0000-KPBR01111_00-AAAAAAAAAAAAAAAA
 
 # Libraries linked into the ELF.
-LIBS        := -lc -lkernel -lc++ -lSceUserService -lSceSystemService -lSceNet -lSceHttp -lSceBgft -lSceAppInstUtil -lSceSsl -lSceSysmodule -lSceNetCtl -lSceJson -lSceNpUtility -lSceNpCommon
+LIBS        := -lc -lkernel -lc++ -lSceUserService -lSceSystemService -lSceNet -lSceHttp -lSceBgft -lSceAppInstUtil -lSceSsl -lSceSysmodule -lSceNetCtl -lSceNpUtility -lSceNpCommon
 
 # Additional compile flags.
 #EXTRAFLAGS  := 
