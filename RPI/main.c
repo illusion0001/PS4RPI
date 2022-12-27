@@ -12,6 +12,7 @@
 #include <orbis/UserService.h>
 
 #define SERVER_PORT (12801)
+#define work_dir "/data"
 
 int sceUserMainThreadPriority = 700;
 
@@ -67,7 +68,7 @@ void Jailbreak()
 {
 	// unjail
 	int urmom = 0;
-	int32_t handlejbc = sceKernelLoadStartModule("/app0/sce_module/libjbc.prx", NULL, NULL, NULL, NULL, NULL);
+	int32_t handlejbc = sceKernelLoadStartModule("/app0/sce_module/libjbc.prx", 0, 0, 0, 0, 0);
 	KernelPrintOut("libjbc handle is 0x%lx\n", handlejbc);
 
 	if (handlejbc > 0)
@@ -95,7 +96,6 @@ void Jailbreak()
 
 int main(int argc, const char* const argv[]) 
 {
-	char* work_dir;
 	char ip_address[16];
 	int ret;
 
@@ -109,17 +109,16 @@ int main(int argc, const char* const argv[])
 	}
 
 
-	//printf("Initializing user service...\n");
+	printf("Initializing user service...\n");
 	ret = sceUserServiceInitialize(NULL);
 	if (ret) {
 		EPRINTF("User service initialization failed.\n");
 		goto err;
 	}
 
-	work_dir = "/data";
-	//printf("Working directory: %s\n", work_dir);
+	printf("Working directory: %s\n", work_dir);
 
-	//printf("Initializing AppInstUtil...\n");
+	printf("Initializing AppInstUtil...\n");
 	if (!app_inst_util_init()) {
 		EPRINTF("AppInstUtil initialization failed.\n");
 		goto err_user_service_terminate;
