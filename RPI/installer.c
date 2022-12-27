@@ -5,7 +5,7 @@
 #include "KPutil.h"
 
 #include <orbis/libkernel.h>
-#include <orbis/userservice.h>
+#include <orbis/UserService.h>
 #include <orbis/AppInstUtil.h>
 #include <orbis/bgft.h>
 #include <sys/param.h>
